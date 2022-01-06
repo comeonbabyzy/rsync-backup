@@ -1,9 +1,7 @@
 package backup
 
 import (
-	"encoding/json"
 	"io/ioutil"
-	"log"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -14,8 +12,9 @@ import (
 	"runtime"
 	"time"
 
+	log "github.com/sirupsen/logrus"
+
 	resty "github.com/go-resty/resty/v2"
-	"github.com/pkg/errors"
 	"gopkg.in/ini.v1"
 )
 
@@ -103,7 +102,7 @@ func (config *Config) GetLocalConfig(configFile string) *ini.File {
 func (config *Config) GetServerConfig(URL string) {
 
 	client := resty.New()
-	configResult := &types.JsonConfigResult{}
+	configResult := &types.ResponseGetConfig{}
 	resp, err := client.R().SetResult(configResult).Get(URL)
 
 	if err != nil {
@@ -122,7 +121,28 @@ func (config *Config) GetServerConfig(URL string) {
 		log.Fatalf("读取配置文件失败: %v", err)
 	}
 	config.getConfig(Cfg)
+}
 
+func (config *Config) SaveServerConfig(URL string, content string) {
+	client := resty.New()
+	body := types.RequestPostConfig{
+		Data: types.DataPostConfig{
+			Content: content,
+		},
+	}
+	resp, err := client.R().SetBody(body).Post(URL)
+
+	if err != nil {
+		log.Error(err)
+		return
+	}
+
+	if resp.StatusCode() != http.StatusOK {
+		log.Error(err)
+		return
+	}
+
+	log.Info("save config success")
 }
 
 func (config *Config) getConfig(cfg *ini.File) {
@@ -210,9 +230,8 @@ func (config *Config) getConfig(cfg *ini.File) {
 
 func GetClientIP(URL string) string {
 	client := resty.New()
-	result := types.JsonResult{}
+	result := types.ResponseGetIP{}
 
-	//result := ResultIP{}
 	resp, err := client.R().SetResult(&result).Get(URL)
 	if err != nil {
 		log.Fatal(err)
@@ -223,16 +242,11 @@ func GetClientIP(URL string) string {
 		return ""
 	}
 
-	IPData, exist := result.Data["IP"]
+	return result.Data.IP
 
-	if !exist {
-		return ""
-	}
-
-	return IPData.(string)
 }
 
-func GetClientIP2(URL string) string {
+func GetClientIPPlain(URL string) string {
 
 	resp, err := http.Get(URL)
 	if err != nil {
@@ -248,26 +262,21 @@ func GetClientIP2(URL string) string {
 	return string(s)
 }
 
-func GetServerConfig(URL string) (int, string, error) {
-	resp, err := http.Get(URL)
+func MakeServerConfig(URL string) {
+	client := resty.New()
+
+	resp, err := client.R().Post(URL)
+
 	if err != nil {
-		return 400, "", errors.Wrap(err, "get config error.")
-	}
-	defer resp.Body.Close()
-
-	s, err := ioutil.ReadAll(resp.Body)
-	if err != nil {
-		return 400, "", errors.Wrap(err, "get config error.")
+		log.Error(err)
+		return
 	}
 
-	result := string(s)
-	var jsonResult types.JsonResult
-
-	errJson := json.Unmarshal([]byte(result), &jsonResult)
-
-	if errJson != nil {
-		return 400, "", errors.Wrap(err, "get config error.")
+	if resp.StatusCode() != http.StatusOK {
+		log.Error(err)
+		return
 	}
 
-	return jsonResult.Code, jsonResult.Message, nil
+	log.Info("save config success")
+
 }

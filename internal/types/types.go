@@ -32,6 +32,16 @@ type ResponseGetConfig struct {
 	Data DataGetConfig `json:"data"`
 }
 
+type DataPostConfig struct {
+	Content string `json:"content"`
+}
+
+type RequestPostConfig struct {
+	Data DataPostConfig `json:"data"`
+}
+
+////////////////////////////////////
+
 type JsonIPResult struct {
 	Code    int    `json:"code"`
 	Message string `json:"meassage"`

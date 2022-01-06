@@ -2,11 +2,12 @@ package main
 
 import (
 	"fmt"
-	"log"
 	"net/http"
 	"os"
 	"rsync-backup/internal/filepaths"
 	"rsync-backup/internal/types"
+
+	log "github.com/sirupsen/logrus"
 
 	"github.com/gin-gonic/gin"
 )
@@ -50,7 +51,7 @@ func webRoot(c *gin.Context) {
 }
 
 func postServerConfig(c *gin.Context) {
-	var result types.JsonResult
+	var result types.ResponseBase
 	var returnStatus int
 	var returnMessage string
 
@@ -78,10 +79,9 @@ func postServerConfig(c *gin.Context) {
 		returnMessage = fmt.Sprintf("写入配置文件成功 %s", rsyncConfigFile)
 	}
 
-	result = types.JsonResult{
+	result = types.ResponseBase{
 		Code:    returnStatus,
 		Message: returnMessage,
-		Data:    nil,
 	}
 	c.IndentedJSON(returnStatus, result)
 	log.Println(result)
@@ -89,7 +89,7 @@ func postServerConfig(c *gin.Context) {
 
 func getConfig(c *gin.Context) {
 
-	var result types.JsonConfigResult
+	var result types.ResponseGetConfig
 
 	rsyncClientConfigFile := fmt.Sprintf(rsyncClientConfigFileTemplate, getRemoteIP(c))
 
@@ -98,20 +98,36 @@ func getConfig(c *gin.Context) {
 	content, err := filepaths.ReadTxtFile(rsyncClientConfigFile)
 
 	if err != nil {
-		result = types.JsonConfigResult{
-			Code:    http.StatusBadRequest,
-			Message: fmt.Sprintf("读取配置文件%s失败", rsyncClientConfigFile),
-			Data: types.JsonConfigData{
-				FileName: "",
-				Content:  ""},
-		}
-	}
-	c.IndentedJSON(http.StatusBadRequest, result)
+		log.WithFields(log.Fields{
+			"file":      rsyncClientConfigFile,
+			"remote_ip": getRemoteIP(c),
+		}).Error("读取配置文件失败")
 
-	result = types.JsonConfigResult{
-		Code:    http.StatusOK,
-		Message: fmt.Sprintf("返回配置文件%s内容成功！", rsyncClientConfigFile),
-		Data: types.JsonConfigData{
+		result = types.ResponseGetConfig{
+			ResponseBase: types.ResponseBase{
+				Code:    http.StatusBadRequest,
+				Message: "Fail",
+			},
+			Data: types.DataGetConfig{
+				FileName: "",
+				Content:  "",
+			},
+		}
+		c.IndentedJSON(http.StatusBadRequest, result)
+		return
+	}
+
+	log.WithFields(log.Fields{
+		"file":      rsyncClientConfigFile,
+		"remote_ip": getRemoteIP(c),
+	}).Info("读取配置文件成功")
+
+	result = types.ResponseGetConfig{
+		ResponseBase: types.ResponseBase{
+			Code:    http.StatusOK,
+			Message: "Success",
+		},
+		Data: types.DataGetConfig{
 			FileName: rsyncClientConfigFile,
 			Content:  content,
 		},
@@ -121,20 +137,10 @@ func getConfig(c *gin.Context) {
 }
 
 func getClientIP(c *gin.Context) {
-	//ipData := types.DataIP{IP: getRemoteIP(c)}
-
-	/*
-		result := types.JsonResult{
-			Code:    http.StatusOK,
-			Message: "Get Client ip OK.",
-			Data:    ipData,
-		}
-	*/
-
 	ResultIP := types.ResponseGetIP{
 		ResponseBase: types.ResponseBase{
 			Code:    http.StatusOK,
-			Message: "Get Client ip OK.",
+			Message: "Success",
 		},
 		Data: types.DataGetIP{
 			IP: getRemoteIP(c),
@@ -144,23 +150,21 @@ func getClientIP(c *gin.Context) {
 }
 
 func postConfig(c *gin.Context) {
-
-	json := types.JsonConfigRequest{}
-	c.BindJSON(&json)
+	requestCfg := types.RequestPostConfig{}
+	c.BindJSON(&requestCfg)
 	rsyncClientConfigFile := fmt.Sprintf(rsyncClientConfigFileTemplate, getRemoteIP(c))
-	err := filepaths.WriteStringToFile(rsyncClientConfigFile, json.Data.Content)
+	err := filepaths.WriteStringToFile(rsyncClientConfigFile, requestCfg.Data.Content)
 
 	if err != nil {
 		c.IndentedJSON(http.StatusBadRequest,
-			types.JsonResult{
+			types.ResponseBase{
 				Code:    http.StatusBadRequest,
 				Message: "写入文件失败！",
-				Data:    nil,
 			})
 	}
 
 	c.IndentedJSON(http.StatusOK,
-		types.JsonResult{
+		types.ResponseBase{
 			Code:    http.StatusOK,
 			Message: "写入文件成功！",
 		})
