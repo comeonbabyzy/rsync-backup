@@ -4,6 +4,7 @@ import (
 	"flag"
 	"rsync-backup/cmd/client/backup"
 	"rsync-backup/internal/filepaths"
+	"runtime"
 
 	log "github.com/sirupsen/logrus"
 )
@@ -68,10 +69,12 @@ func main() {
 		}
 	}
 
-	backup.GetCWRsync(
-		config.ConfigRootURL+"/cwrsync.zip", "c:\\temp\\cwrsync.zip")
+	if runtime.GOOS == "windows" {
+		backup.GetCWRsync(
+			config.ConfigRootURL+"/cwrsync.zip", "c:\\temp\\cwrsync.zip")
 
-	filepaths.Unzip("c:\\temp\\cwrsync.zip", "c:\\temp")
+		filepaths.Unzip("c:\\temp\\cwrsync.zip", "c:\\temp")
+	}
 
 	backup.MakeServerConfig(
 		config.ConfigRootURL + "/serverconfig")

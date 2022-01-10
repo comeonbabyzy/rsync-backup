@@ -12,6 +12,7 @@ import (
 	log "github.com/sirupsen/logrus"
 
 	"github.com/gin-gonic/gin"
+	"gopkg.in/ini.v1"
 )
 
 type ServerConfig struct {
@@ -40,6 +41,22 @@ func webRoot(c *gin.Context) {
 	c.IndentedJSON(http.StatusOK, result)
 }
 
+func addRsyncModule(rsyncConf string, moduleContent string) error {
+
+	cfg, err := ini.Load(
+		rsyncConf,
+		[]byte(moduleContent),
+	)
+
+	if err != nil {
+		err := filepaths.WriteStringToFile(rsyncConf, moduleContent)
+		return err
+	}
+
+	cfg.SaveToIndent(rsyncConf, "\t")
+	return nil
+}
+
 func postServerConfig(c *gin.Context) {
 	var result types.ResponseBase
 	var returnStatus int
@@ -47,9 +64,10 @@ func postServerConfig(c *gin.Context) {
 
 	ip := getRemoteIP(c)
 
-	rootPath := "/volume1/databackup"
-	appPath := rootPath + "/app" + "/" + ip
-	logPath := rootPath + "/log" + "/" + ip
+	log.Infof("postServerConfig: rsyncDataDir is %s", serverConfig.rsyncDataDir)
+
+	appPath := serverConfig.rsyncDataDir + "/app" + "/" + ip
+	logPath := serverConfig.rsyncDataDir + "/log" + "/" + ip
 
 	rsyncConfigFile := fmt.Sprintf(serverConfig.rsyncConfigFileTemplate, ip)
 
@@ -57,7 +75,8 @@ func postServerConfig(c *gin.Context) {
 	os.MkdirAll(logPath, os.ModePerm)
 
 	content := fmt.Sprintf(serverConfig.rsyncConfigContentTemplate, ip, appPath, ip, ip, logPath, ip)
-	err := filepaths.WriteStringToFile(rsyncConfigFile, content)
+
+	err := addRsyncModule("/etc/rsyncd.conf", content)
 
 	if err != nil {
 		returnStatus = http.StatusBadRequest

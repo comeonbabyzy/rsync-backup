@@ -108,7 +108,7 @@ func ToCygwinPath_OLD(path string) string {
 func ToCygwinPath(path string) string {
 	if runtime.GOOS == "windows" {
 		noColonPath := strings.ReplaceAll(path, ":", "")
-		return "/cygdrive/" + filepath.ToSlash(noColonPath)
+		return strings.ToLower("/cygdrive/" + filepath.ToSlash(noColonPath))
 	}
 
 	return path
