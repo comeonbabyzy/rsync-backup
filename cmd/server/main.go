@@ -1,9 +1,11 @@
 package main
 
 import (
+	"flag"
 	"fmt"
 	"net/http"
 	"os"
+	"path/filepath"
 	"rsync-backup/internal/filepaths"
 	"rsync-backup/internal/types"
 
@@ -12,28 +14,16 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-const rsyncDataDir string = "/volume1/databackup"
-const rsyncClientConfigFileTemplate string = rsyncDataDir + "/%s.conf"
-const rsyncConfigFileTemplate string = "/etc/rsyncd.d/%s.conf"
-const rsyncConfigContentTemplate string = `
-[app_%s]
-path = %s
-uid = rsync
-gid = users 
-read only = no
-auth users = rsync
-secrets file = /etc/rsyncd.secrets
-hosts allow = %s
+type ServerConfig struct {
+	rsyncDataDir                  string
+	rsyncClientConfigFileTemplate string
+	rsyncConfigFileTemplate       string
+	rsyncConfigContentTemplate    string
+}
 
-[log_%s]
-path = %s
-uid = rsync
-gid = users 
-read only = no
-auth users = rsync
-secrets file = /etc/rsyncd.secrets
-hosts allow = %s
-`
+var (
+	serverConfig = ServerConfig{}
+)
 
 func getRemoteIP(c *gin.Context) string {
 	remoteIP, _ := c.RemoteIP()
@@ -61,13 +51,12 @@ func postServerConfig(c *gin.Context) {
 	appPath := rootPath + "/app" + "/" + ip
 	logPath := rootPath + "/log" + "/" + ip
 
-	rsyncConfigFile := fmt.Sprintf(rsyncConfigFileTemplate, ip)
-	//rsyncConfigFile := fmt.Sprintf("d:\\etc\\rsync.d\\%s.conf", ip)
+	rsyncConfigFile := fmt.Sprintf(serverConfig.rsyncConfigFileTemplate, ip)
 
 	os.MkdirAll(appPath, os.ModePerm)
 	os.MkdirAll(logPath, os.ModePerm)
 
-	content := fmt.Sprintf(rsyncConfigContentTemplate, ip, appPath, ip, ip, logPath, ip)
+	content := fmt.Sprintf(serverConfig.rsyncConfigContentTemplate, ip, appPath, ip, ip, logPath, ip)
 	err := filepaths.WriteStringToFile(rsyncConfigFile, content)
 
 	if err != nil {
@@ -91,9 +80,7 @@ func getConfig(c *gin.Context) {
 
 	var result types.ResponseGetConfig
 
-	rsyncClientConfigFile := fmt.Sprintf(rsyncClientConfigFileTemplate, getRemoteIP(c))
-
-	//rsyncClientConfigFile = "d:\\volume1\\databackup\\192.168.191.133.conf"
+	rsyncClientConfigFile := fmt.Sprintf(serverConfig.rsyncClientConfigFileTemplate, getRemoteIP(c))
 
 	content, err := filepaths.ReadTxtFile(rsyncClientConfigFile)
 
@@ -152,7 +139,7 @@ func getClientIP(c *gin.Context) {
 func postConfig(c *gin.Context) {
 	requestCfg := types.RequestPostConfig{}
 	c.BindJSON(&requestCfg)
-	rsyncClientConfigFile := fmt.Sprintf(rsyncClientConfigFileTemplate, getRemoteIP(c))
+	rsyncClientConfigFile := fmt.Sprintf(serverConfig.rsyncClientConfigFileTemplate, getRemoteIP(c))
 	err := filepaths.WriteStringToFile(rsyncClientConfigFile, requestCfg.Data.Content)
 
 	if err != nil {
@@ -177,11 +164,56 @@ func setupRouter() *gin.Engine {
 	r.GET("/config", getConfig)
 	r.POST("/config", postConfig)
 	r.POST("/serverconfig", postServerConfig)
-
+	r.GET("/cwrsync.zip", func(c *gin.Context) {
+		c.File("cwrsync.zip")
+	})
 	return r
 }
 
+func (serverConfig *ServerConfig) getConfig() {
+
+	flag.StringVar(&serverConfig.rsyncDataDir, "d", "", "备份数据根目录")
+	flag.Parse()
+
+	if serverConfig.rsyncDataDir == "" {
+		flag.Usage()
+		log.Fatal("请加 -d 参数设置备份数据根目录")
+	}
+
+	var err error
+	serverConfig.rsyncDataDir, err = filepath.Abs(serverConfig.rsyncDataDir)
+
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	serverConfig.rsyncClientConfigFileTemplate = serverConfig.rsyncDataDir + "/%s.conf"
+	serverConfig.rsyncConfigFileTemplate = "/etc/rsyncd.d/%s.conf"
+	serverConfig.rsyncConfigContentTemplate = `
+[app_%s]
+path = %s
+uid = rsync
+gid = users 
+read only = no
+auth users = rsync
+secrets file = /etc/rsyncd.secrets
+hosts allow = %s
+
+[log_%s]
+path = %s
+uid = rsync
+gid = users 
+read only = no
+auth users = rsync
+secrets file = /etc/rsyncd.secrets
+hosts allow = %s
+`
+}
+
 func main() {
+
+	serverConfig.getConfig()
+
 	r := setupRouter()
 	r.Run(":8080") // listen and serve on 0.0.0.0:8080
 }

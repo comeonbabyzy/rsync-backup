@@ -1,20 +1,17 @@
 package backup
 
 import (
-	"io/ioutil"
-	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"regexp"
 	"rsync-backup/internal/filepaths"
 	"rsync-backup/internal/slices"
-	"rsync-backup/internal/types"
 	"runtime"
 	"time"
 
 	log "github.com/sirupsen/logrus"
 
-	resty "github.com/go-resty/resty/v2"
 	"gopkg.in/ini.v1"
 )
 
@@ -51,7 +48,6 @@ type App struct {
 var (
 	Sections   []string
 	ConfigFile string
-	config     *Config
 )
 
 func GetRsyncCmd() string {
@@ -99,52 +95,6 @@ func (config *Config) GetLocalConfig(configFile string) *ini.File {
 	return cfg
 }
 
-func (config *Config) GetServerConfig(URL string) {
-
-	client := resty.New()
-	configResult := &types.ResponseGetConfig{}
-	resp, err := client.R().SetResult(configResult).Get(URL)
-
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	if resp.StatusCode() != 200 {
-		log.Fatal(resp.Status())
-	}
-
-	Cfg, err := ini.Load(ini.LoadOptions{
-		AllowPythonMultilineValues: true,
-	}, configResult.Data.Content)
-
-	if err != nil {
-		log.Fatalf("读取配置文件失败: %v", err)
-	}
-	config.getConfig(Cfg)
-}
-
-func (config *Config) SaveServerConfig(URL string, content string) {
-	client := resty.New()
-	body := types.RequestPostConfig{
-		Data: types.DataPostConfig{
-			Content: content,
-		},
-	}
-	resp, err := client.R().SetBody(body).Post(URL)
-
-	if err != nil {
-		log.Error(err)
-		return
-	}
-
-	if resp.StatusCode() != http.StatusOK {
-		log.Error(err)
-		return
-	}
-
-	log.Info("save config success")
-}
-
 func (config *Config) getConfig(cfg *ini.File) {
 	err := cfg.MapTo(config)
 
@@ -154,7 +104,16 @@ func (config *Config) getConfig(cfg *ini.File) {
 
 	config.Today = time.Now().Format("20060102")
 
-	localIP := GetClientIP(config.ConfigRootURL + "/ip")
+	u, err := url.Parse(config.ConfigRootURL)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	ipURL, err := u.Parse("/ip")
+	if err != nil {
+		log.Fatal(err)
+	}
+	localIP := GetClientIP(ipURL.String())
 
 	if localIP != "" {
 		config.LocalIP = localIP
@@ -226,57 +185,4 @@ func (config *Config) getConfig(cfg *ini.File) {
 
 		config.Apps = append(config.Apps, *app)
 	}
-}
-
-func GetClientIP(URL string) string {
-	client := resty.New()
-	result := types.ResponseGetIP{}
-
-	resp, err := client.R().SetResult(&result).Get(URL)
-	if err != nil {
-		log.Fatal(err)
-		return ""
-	}
-	if resp.StatusCode() != http.StatusOK {
-		log.Fatal(resp.Status())
-		return ""
-	}
-
-	return result.Data.IP
-
-}
-
-func GetClientIPPlain(URL string) string {
-
-	resp, err := http.Get(URL)
-	if err != nil {
-		log.Printf("get client ip error: %v", err)
-		return ""
-	}
-	defer resp.Body.Close()
-	s, err := ioutil.ReadAll(resp.Body)
-	if err != nil {
-		log.Printf("get client ip error: %v", err)
-		return ""
-	}
-	return string(s)
-}
-
-func MakeServerConfig(URL string) {
-	client := resty.New()
-
-	resp, err := client.R().Post(URL)
-
-	if err != nil {
-		log.Error(err)
-		return
-	}
-
-	if resp.StatusCode() != http.StatusOK {
-		log.Error(err)
-		return
-	}
-
-	log.Info("save config success")
-
 }

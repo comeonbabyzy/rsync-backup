@@ -40,16 +40,6 @@ func TestFilePath(t *testing.T) {
 	t.Log(path)
 }
 
-func TestConvertToRsyncPath1(t *testing.T) {
-	rsyncPath1, rsyncPath2, rsyncPath3 := ConvertToRsyncPath2("/usr/local/nginx")
-
-	t.Logf("Linux: rsyncPath1: %s, rsyncPath2: %s, rsyncPath3: %s \n", rsyncPath1, rsyncPath2, rsyncPath3)
-
-	winRsyncPath1, winRsyncPath2, winRsyncPath3 := ConvertToRsyncPath2("d:\\test\\")
-
-	t.Logf("Windows: winRsyncPath1: %s, winRsyncPath2: %s, winRsyncPath3: %s \n", winRsyncPath1, winRsyncPath2, winRsyncPath3)
-}
-
 func TestConvertToRsyncPath2(t *testing.T) {
 
 	path := "d:\\test"

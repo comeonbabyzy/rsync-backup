@@ -1,7 +1,9 @@
 package filepaths
 
 import (
+	"archive/zip"
 	"bufio"
+	"io"
 	"io/ioutil"
 	"log"
 	"net/url"
@@ -167,31 +169,40 @@ func GetDirFilesRsyncPath(path string, destPath string) []string {
 	return files
 }
 
-// 把输入路径格式化为三种格式：用于rsync命令进行同步
-// eg: c:\windows\system32\ -> /cygdrive/c/windows/system32, /cygdrive/./c/windows/system32, /cygdrive/c/windows/./system32
-// eg: /usr/local/nginx -> /usr/local/nginx, /usr/local/nginx, /usr/local/./nginx
-func ConvertToRsyncPath2(path string) (string, string, string) {
-	var rsyncPath1, rsyncPath2, rsyncPath3 string
-
-	sourceAbsPath, _ := filepath.Abs(path)
-	sourceDir := filepath.Dir(sourceAbsPath)
-	sourceBase := filepath.Base(sourceAbsPath)
-
-	if runtime.GOOS == "windows" {
-		sourceVolume := strings.ToLower(filepath.VolumeName(sourceAbsPath))
-		sourceDrive := strings.ReplaceAll(sourceVolume, ":", "")
-		sourceDir := strings.ReplaceAll(sourceDir, sourceVolume, "")
-
-		rsyncPath1 = filepath.ToSlash(filepath.Clean("/cygdrive/" + sourceDrive + sourceDir + "/" + sourceBase))
-		rsyncPath2 = filepath.ToSlash("/cygdrive/./" + filepath.Clean(sourceDrive+sourceDir+"/"+sourceBase))
-		rsyncPath3 = filepath.ToSlash(filepath.Clean("/cygdrive/"+sourceDrive+sourceDir) + "/./" + sourceBase)
-	} else {
-		sourceDirToSlash := filepath.ToSlash(sourceDir)
-
-		rsyncPath1 = sourceAbsPath
-		rsyncPath2 = sourceAbsPath
-		rsyncPath3 = filepath.Clean(sourceDirToSlash + "/./" + sourceBase)
+//参考 https://www.jianshu.com/p/4593cfffb9e9
+func Unzip(zipFile string, destDir string) error {
+	zipReader, err := zip.OpenReader(zipFile)
+	if err != nil {
+		return err
 	}
+	defer zipReader.Close()
 
-	return rsyncPath1, rsyncPath2, rsyncPath3
+	for _, f := range zipReader.File {
+		fpath := filepath.Join(destDir, f.Name)
+		if f.FileInfo().IsDir() {
+			os.MkdirAll(fpath, os.ModePerm)
+		} else {
+			if err = os.MkdirAll(filepath.Dir(fpath), os.ModePerm); err != nil {
+				return err
+			}
+
+			inFile, err := f.Open()
+			if err != nil {
+				return err
+			}
+			defer inFile.Close()
+
+			outFile, err := os.OpenFile(fpath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, f.Mode())
+			if err != nil {
+				return err
+			}
+			defer outFile.Close()
+
+			_, err = io.Copy(outFile, inFile)
+			if err != nil {
+				return err
+			}
+		}
+	}
+	return nil
 }

@@ -1,11 +1,11 @@
 package main
 
 import (
-	"rsync-backup/internal/backup"
+	"rsync-backup/cmd/client/backup"
 	"testing"
 )
 
-func TestMain(t *testing.T) {
+func TestMain1(t *testing.T) {
 
 	configFile := "d:/Projects/rsync-backup/example/config.ini"
 
@@ -14,4 +14,8 @@ func TestMain(t *testing.T) {
 	config.GetLocalConfig(configFile)
 
 	config.Apps[0].BackupApp()
+}
+
+func TestMain(t *testing.T) {
+	main()
 }
