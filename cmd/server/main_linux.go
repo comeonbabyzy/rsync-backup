@@ -1,3 +1,6 @@
+//go:build linux
+// +build linux
+
 package main
 
 import (
@@ -58,21 +61,22 @@ func addRsyncModule(rsyncConf string, moduleContent string) error {
 	return nil
 }
 
-func getOwner(path string)(int, int, error) {
-	info, err:=os.Stat(path)
-	if err!=nil {
+func getOwner(path string) (int, int, error) {
+	info, err := os.Stat(path)
+	if err != nil {
 		return -1, -1, err
 	}
-	stat:=info.Sys().(*syscall.Stat_t)
+	stat := info.Sys().(*syscall.Stat_t)
+
 	return int(stat.Uid), int(stat.Gid), nil
 }
 
-func chown(rootPath string, uid, gid int){
-	err:=filepath.Walk(rootPath, func(path string, info os.FileInfo, err error) error {
+func chown(rootPath string, uid, gid int) {
+	err := filepath.Walk(rootPath, func(path string, info os.FileInfo, err error) error {
 		return os.Chown(path, uid, gid)
 	})
 
-	if err !=nil {
+	if err != nil {
 		log.Infof("Chown %s fail. Error: %v", rootPath, err)
 	}
 }
@@ -91,19 +95,17 @@ func postServerConfig(c *gin.Context) {
 
 	rsyncConfigFile := fmt.Sprintf(serverConfig.rsyncConfigFileTemplate, ip)
 
-	
 	os.MkdirAll(appPath, os.ModePerm)
 	os.MkdirAll(logPath, os.ModePerm)
 
-	gid, uid, err:=getOwner(serverConfig.rsyncDataDir)
+	gid, uid, err := getOwner(serverConfig.rsyncDataDir)
 
-	if err!=nil {
+	if err != nil {
 		log.Errorf("getOwner error")
 	} else {
 		chown(appPath, gid, uid)
 		chown(appPath, gid, uid)
 	}
-	
 
 	content := fmt.Sprintf(serverConfig.rsyncConfigContentTemplate, ip, appPath, ip, ip, logPath, ip)
 
