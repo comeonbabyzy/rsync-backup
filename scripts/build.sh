@@ -14,3 +14,5 @@ go build -o bin/rsync_backup cmd/client/main.go
 go build -o bin/rsync_backup_server cmd/server/main.go
 
 cp example/config.ini bin/config.ini
+
+scp bin/* repo.cczqnw.com:/data/html/rsync-backup
