@@ -80,7 +80,7 @@ func postServerConfig(c *gin.Context) {
 		log.Errorf("getOwner error")
 	} else {
 		filepaths.Chown(appPath, gid, uid)
-		filepaths.Chown(appPath, gid, uid)
+		filepaths.Chown(logPath, gid, uid)
 	}
 
 	content := fmt.Sprintf(serverConfig.rsyncConfigContentTemplate, ip, appPath, ip, ip, logPath, ip)
